@@ -7,6 +7,7 @@ Personal Codex skill collection.
 - `caveman`
 - `codex-worker`
 - `diagnose`
+- `frontend-design`
 - `grill-me`
 - `grill-with-docs`
 - `improve-codebase-architecture`
@@ -21,4 +22,3 @@ Personal Codex skill collection.
 - `triage`
 - `write-a-skill`
 - `zoom-out`
-
