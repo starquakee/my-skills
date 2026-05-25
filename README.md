@@ -15,6 +15,7 @@ Personal Codex skill collection.
 - `prototype`
 - `pull-request`
 - `ralph`
+- `ralph-autonomous-development`
 - `setup-matt-pocock-skills`
 - `tdd`
 - `to-issues`
