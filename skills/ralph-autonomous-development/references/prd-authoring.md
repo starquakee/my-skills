@@ -2,6 +2,8 @@
 
 Write the PRD as an executable contract for future fresh agents.
 
+Before writing, run `grill-me` or `grill-with-docs` to harden the plan. Copy the accepted conclusions into the PRD. Ralph should execute decisions, not discover them halfway through implementation.
+
 ## Required Shape
 
 ```markdown
@@ -52,6 +54,8 @@ Good decisions reduce agent drift:
 - "Use schema version 2 and reject schema version 1."
 - "Use platform trash, not hard delete."
 - "Run real integration validation for success paths."
+- "This run does not add a compatibility fallback."
+- "This run preserves user data directories during setup, update, and repair."
 
 Weak decisions cause drift:
 
@@ -101,4 +105,3 @@ Avoid:
 - "Looks good."
 - "Handles all cases."
 - "No regressions."
-

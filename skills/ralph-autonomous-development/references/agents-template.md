@@ -11,15 +11,16 @@ You are an autonomous coding agent working in this repository.
 
 1. Read `tasks/prd-[feature].md`, root `prd.json`, and `progress.txt`.
 2. Read any referenced architecture docs named by the PRD.
-3. Check that you are on the branch from `prd.json` `branchName`. If not, check it out or create it from the current branch.
-4. Pick the highest-priority user story where `passes: false`.
-5. Implement that single user story only.
-6. Run the checks required by the story. At minimum, run the repo's typecheck or equivalent.
-7. If the story touches UI, verify it in a browser.
-8. If the story touches runtime, release, infrastructure, or external integration behavior, run the real validation named in the PRD.
-9. Update the source PRD and root `prd.json` to set the completed story `passes: true`.
-10. Append your progress to `progress.txt`.
-11. Commit all changes with message: `feat: [Story ID] - [Story Title]`, then push.
+3. Treat the PRD's Decisions, Non-Goals, Validation, and Risks as already hardened. Do not reopen them unless implementation proves a contradiction.
+4. Check that you are on the branch from `prd.json` `branchName`. If not, check it out or create it from the current branch.
+5. Pick the highest-priority user story where `passes: false`.
+6. Implement that single user story only.
+7. Run the checks required by the story. At minimum, run the repo's typecheck or equivalent.
+8. If the story touches UI, verify it in a browser.
+9. If the story touches runtime, release, infrastructure, or external integration behavior, run the real validation named in the PRD.
+10. Update the source PRD and root `prd.json` to set the completed story `passes: true`.
+11. Append your progress to `progress.txt`.
+12. Commit all changes with message: `feat: [Story ID] - [Story Title]`, then push.
 
 ## Current Run Constraints
 
@@ -68,4 +69,3 @@ If all stories are complete and passing, reply with:
 
 If any story remains incomplete, end normally so the next iteration can continue.
 ```
-
