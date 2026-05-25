@@ -44,10 +44,22 @@ PROGRESS_FILE="$REPO_ROOT/progress.txt"
 ARCHIVE_DIR="$REPO_ROOT/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 
-CURRENT_BRANCH=""
-if [[ -f "$PRD_FILE" ]]; then
-  CURRENT_BRANCH="$(jq -r '.branchName // empty' "$PRD_FILE" 2>/dev/null || true)"
-fi
+read_branch_name() {
+  [[ -f "$PRD_FILE" ]] || return 0
+  if command -v jq >/dev/null; then
+    jq -r '.branchName // empty' "$PRD_FILE" 2>/dev/null || true
+  elif command -v node >/dev/null; then
+    node -e "const fs=require('fs'); try { const data=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); console.log(data.branchName || ''); } catch { process.exit(0); }" "$PRD_FILE"
+  elif command -v python3 >/dev/null; then
+    python3 -c "import json,sys; print((json.load(open(sys.argv[1])).get('branchName') or ''))" "$PRD_FILE" 2>/dev/null || true
+  fi
+}
+
+has_json_reader() {
+  command -v jq >/dev/null || command -v node >/dev/null || command -v python3 >/dev/null
+}
+
+CURRENT_BRANCH="$(read_branch_name)"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "Ralph dry run"
@@ -58,11 +70,12 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "  branch: ${CURRENT_BRANCH:-<missing>}"
   echo "  tool: $TOOL"
 
+  has_json_reader || { echo "Error: jq, node, or python3 is required to read prd.json" >&2; exit 1; }
   [[ -f "$PRD_FILE" ]] || { echo "Error: missing $PRD_FILE" >&2; exit 1; }
   [[ -n "$CURRENT_BRANCH" ]] || { echo "Error: prd.json branchName is missing" >&2; exit 1; }
   [[ -f "$PROGRESS_FILE" ]] || { echo "Error: missing $PROGRESS_FILE" >&2; exit 1; }
   [[ -d "$ARCHIVE_DIR" ]] || { echo "Error: missing $ARCHIVE_DIR" >&2; exit 1; }
-  command -v jq >/dev/null || { echo "Error: jq is required" >&2; exit 1; }
+  [[ -f "$SCRIPT_DIR/AGENTS.md" ]] || { echo "Error: missing $SCRIPT_DIR/AGENTS.md" >&2; exit 1; }
 
   echo "Dry run OK"
   exit 0
@@ -134,4 +147,3 @@ echo ""
 echo "Ralph reached max iterations ($MAX_ITERATIONS) without completing all tasks."
 echo "Check $PROGRESS_FILE for status."
 exit 1
-

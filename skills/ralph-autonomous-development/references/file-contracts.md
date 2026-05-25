@@ -75,6 +75,7 @@ Rules:
 - Append; do not rewrite history during normal execution.
 - Record failed validation honestly.
 - Promote repeated gotchas into `Codebase Patterns`.
+- Create this file before `scripts/ralph/ralph.sh --dry-run`; dry-run is a validator, not an initializer.
 
 ## `archive/`
 
@@ -93,3 +94,8 @@ archive/YYYY-MM-DD-feature-name/
 
 Archive before starting a new run if the existing `prd.json.branchName` differs.
 
+Create the directory before dry-run:
+
+```bash
+mkdir -p archive
+```

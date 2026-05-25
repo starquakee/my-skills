@@ -45,7 +45,7 @@ Before creating files or launching:
 ```bash
 git status --short --branch
 test -d .git
-command -v jq
+command -v jq || command -v node || command -v python3
 ```
 
 Then inspect existing conventions:
@@ -159,6 +159,20 @@ Use `references/agents-template.md` for `scripts/ralph/AGENTS.md`.
 Use `references/runner-template.sh` for `scripts/ralph/ralph.sh`.
 Use `references/file-contracts.md` for `progress.txt` and archive rules.
 
+Bootstrap a new repository with this shape:
+
+```bash
+mkdir -p tasks scripts/ralph archive
+# Copy this skill's references/runner-template.sh to scripts/ralph/ralph.sh
+# Copy this skill's references/agents-template.md to scripts/ralph/AGENTS.md
+chmod +x scripts/ralph/ralph.sh
+test -f progress.txt || {
+  printf '# Ralph Progress: [Feature Name]\n\n'
+  printf 'Started: %s\n' "$(date +%Y-%m-%d)"
+  printf 'Source PRD: tasks/prd-[feature].md\n'
+} > progress.txt
+```
+
 Make `scripts/ralph/AGENTS.md` specific to the current repo. It must tell the fresh agent:
 
 - what source PRD and architecture docs to read
@@ -184,6 +198,7 @@ Dry-run must verify:
 - root `progress.txt` exists
 - `archive/` exists
 - the requested tool is supported by the runner
+- at least one JSON reader is available: `jq`, `node`, or `python3`
 
 Fix dry-run failures before launching.
 
