@@ -7,6 +7,7 @@ Personal Codex skill collection.
 - `caveman`
 - `codex-worker`
 - `diagnose`
+- `frontend-gpt`
 - `frontend-design`
 - `grill-me`
 - `grill-with-docs`

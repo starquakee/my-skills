@@ -1,0 +1,4 @@
+interface:
+  display_name: "Frontend GPT"
+  short_description: "Frontend development guidance for GPT agents"
+  default_prompt: "Use this skill when building or refining frontend apps, websites, dashboards, games, or UI components."
