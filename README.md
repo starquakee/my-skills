@@ -10,7 +10,6 @@ Personal Codex skill collection.
 - `frontend-dev`
 - `frontend-gpt`
 - `grill-me`
-- `grill-with-docs`
 - `improve-codebase-architecture`
 - `prd`
 - `pull-request`
