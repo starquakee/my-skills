@@ -8,7 +8,6 @@ Personal Codex skill collection.
 - `diagnose`
 - `frontend-design`
 - `frontend-dev`
-- `frontend-gpt`
 - `grill-me`
 - `improve-codebase-architecture`
 - `prd`
