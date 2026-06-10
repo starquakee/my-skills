@@ -9,6 +9,7 @@ Personal Codex skill collection.
 - `frontend-design`
 - `frontend-dev`
 - `grill-me`
+- `humanizer-zh`
 - `improve-codebase-architecture`
 - `prd`
 - `pull-request`
