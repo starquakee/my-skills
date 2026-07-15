@@ -11,6 +11,7 @@ Personal Codex skill collection.
 - `grill-me`
 - `humanizer-zh`
 - `improve-codebase-architecture`
+- `kill-ai-slop`
 - `prd`
 - `pull-request`
 - `ralph`
