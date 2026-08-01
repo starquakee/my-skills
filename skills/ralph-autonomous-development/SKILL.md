@@ -1,6 +1,6 @@
 ---
 name: ralph-autonomous-development
-description: "Run a complete Ralph-style autonomous coding workflow in any git repository: stress-test a plan with grill-me or grill-with-docs, turn hardened decisions into PRD markdown, convert it to prd.json, create or update scripts/ralph/AGENTS.md and scripts/ralph/ralph.sh, launch Codex/Claude/Amp one-story-per-iteration loops, supervise progress.txt, validate, commit, push, and finish safely. Use when the user asks to set up, learn, create, run, or operate automated Ralph development."
+description: "Run a complete Ralph-style autonomous coding workflow in any git repository: stress-test a plan, create a PRD and prd.json, prepare repository-local handoff files, launch one-story-per-iteration loops with Codex, Claude, Amp, Kimi, or any CLI agent through an adapter, supervise progress, validate, commit, push, and finish safely. Use when the user asks to set up, learn, create, run, or repair automated Ralph development."
 ---
 
 # Ralph Autonomous Development
@@ -27,7 +27,7 @@ Identify the user's intent:
 - **Harden a plan:** use `grill-me` or `grill-with-docs` before writing the PRD.
 - **Convert an existing PRD:** use the `ralph` skill to produce `prd.json`.
 - **Start from a rough idea:** use the `prd` skill first, then `ralph`.
-- **Run the loop:** verify files, run dry-run, launch with the requested tool.
+- **Run the loop:** verify files, run dry-run, launch with the requested agent.
 - **Repair a run:** inspect `prd.json`, `progress.txt`, recent commits, and failed validation.
 
 Use this skill together with:
@@ -197,7 +197,7 @@ Dry-run must verify:
 - `prd.json.branchName` is present
 - root `progress.txt` exists
 - `archive/` exists
-- the requested tool is supported by the runner
+- the requested built-in agent or custom adapter is available
 - at least one JSON reader is available: `jq`, `node`, or `python3`
 
 Fix dry-run failures before launching.
@@ -207,16 +207,38 @@ Fix dry-run failures before launching.
 Start with a small iteration count:
 
 ```bash
-scripts/ralph/ralph.sh --tool codex 3
+scripts/ralph/ralph.sh --agent codex 3
 ```
 
 Then continue in batches:
 
 ```bash
-scripts/ralph/ralph.sh --tool codex 10
+scripts/ralph/ralph.sh --agent codex 10
 ```
 
-Use `--tool claude` or `--tool amp` only if those CLIs are installed and the runner template supports them.
+The built-in adapters are `codex`, `claude`, `amp`, and `kimi`. For Kimi Code CLI, run:
+
+```bash
+scripts/ralph/ralph.sh --agent kimi 3
+```
+
+`--tool` remains a backward-compatible alias for `--agent`.
+
+For any other CLI agent, provide an executable adapter:
+
+```bash
+scripts/ralph/ralph.sh \
+  --agent my-agent \
+  --agent-command scripts/ralph/my-agent-adapter.sh \
+  3
+```
+
+The runner invokes the adapter from the repository root and passes the path to
+`scripts/ralph/AGENTS.md` as its first argument. It also exports
+`RALPH_AGENT`, `RALPH_REPO_ROOT`, `RALPH_PROMPT_FILE`, `RALPH_ITERATION`, and
+`RALPH_MAX_ITERATIONS`. The adapter must run exactly one non-interactive agent
+turn and stream the agent output to stdout or stderr. Verify the installed
+agent's current non-interactive and permission flags instead of guessing them.
 
 ## Phase 6: Supervise
 
@@ -272,4 +294,5 @@ when every story is complete and validated.
 - Do not make a story depend on a later story.
 - Do not hide failures in `notes`; leave the story failing and record the blocker in `progress.txt`.
 - Do not push secrets, temp homes, logs, or generated credentials from validation runs.
+- Treat custom agent adapters as trusted executable code and review them before launching.
 - Prefer narrow, deterministic checks over broad "works correctly" criteria.
