@@ -61,11 +61,13 @@ Append to `progress.txt`:
 
 After completing a story, check whether all stories in `prd.json` have `passes: true`.
 
-If all stories are complete and passing, reply with:
+If all stories are complete and passing, end your reply with the following token on its own line, with nothing else on that line:
 
 ```text
 <promise>COMPLETE</promise>
 ```
+
+The runner accepts completion only when the token appears on a line by itself AND every story in `prd.json` has `passes: true`. Mentioning the token inside a sentence does not signal completion.
 
 If any story remains incomplete, end normally so the next iteration can continue.
 ```

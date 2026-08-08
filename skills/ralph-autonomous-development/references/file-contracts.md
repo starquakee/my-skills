@@ -92,7 +92,7 @@ archive/YYYY-MM-DD-feature-name/
   prd-feature-name.md
 ```
 
-Archive before starting a new run if the existing `prd.json.branchName` differs.
+Archive before writing a new `prd.json` if the existing `prd.json.branchName` differs. The ralph converter does this before overwriting the file; the runner only warns when it detects an unarchived branch change, because by then the old `prd.json` content is already lost.
 
 Create the directory before dry-run:
 

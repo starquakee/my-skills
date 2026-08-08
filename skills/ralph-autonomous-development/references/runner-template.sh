@@ -1,8 +1,23 @@
 #!/usr/bin/env bash
 # Ralph autonomous development loop.
 # Usage:
-#   scripts/ralph/ralph.sh [--agent codex|claude|amp|kimi] [--dry-run] [max_iterations]
-#   scripts/ralph/ralph.sh --agent NAME --agent-command PATH [--dry-run] [max_iterations]
+#   scripts/ralph/ralph.sh [--agent codex|claude|amp|kimi] [--unsafe] [--dry-run] [max_iterations]
+#   scripts/ralph/ralph.sh --agent NAME --agent-command PATH [--unsafe] [--dry-run] [max_iterations]
+#
+# Permission modes:
+#   Default runs each built-in agent in its sandboxed / auto-accept mode:
+#     codex: --full-auto (workspace-write sandbox)
+#     claude: --permission-mode acceptEdits
+#     amp: no bypass flags
+#     kimi: default permission mode from the user's config
+#   --unsafe forwards the agent's bypass-approvals flag:
+#     codex: --dangerously-bypass-approvals-and-sandbox
+#     claude: --dangerously-skip-permissions
+#     amp: --dangerously-allow-all
+#     kimi: --yolo
+#   Custom --agent-command adapters receive RALPH_UNSAFE=0|1 and decide for
+#   themselves. Use --unsafe only inside an externally sandboxed environment
+#   (container, VM, or disposable checkout).
 
 set -euo pipefail
 
@@ -10,6 +25,7 @@ AGENT="${RALPH_AGENT:-codex}"
 AGENT_COMMAND="${RALPH_AGENT_COMMAND:-}"
 MAX_ITERATIONS=10
 DRY_RUN=0
+UNSAFE=0
 
 usage() {
   cat <<'EOF'
@@ -19,6 +35,7 @@ Options:
   --agent NAME          Built-in agent (codex, claude, amp, kimi) or custom label
   --tool NAME           Backward-compatible alias for --agent
   --agent-command PATH  Executable adapter for any other CLI agent
+  --unsafe              Forward the agent's bypass-approvals flag (see header)
   --dry-run             Validate files and the selected agent without launching
   -h, --help            Show this help
 
@@ -50,6 +67,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=1
+      shift
+      ;;
+    --unsafe)
+      UNSAFE=1
       shift
       ;;
     -h|--help)
@@ -108,6 +129,7 @@ run_agent() {
   export RALPH_PROMPT_FILE="$PROMPT_FILE"
   export RALPH_ITERATION="$1"
   export RALPH_MAX_ITERATIONS="$MAX_ITERATIONS"
+  export RALPH_UNSAFE="$UNSAFE"
 
   if [[ -n "$AGENT_COMMAND" ]]; then
     "$AGENT_COMMAND" "$PROMPT_FILE"
@@ -116,16 +138,32 @@ run_agent() {
 
   case "$AGENT" in
     codex)
-      codex exec --dangerously-bypass-approvals-and-sandbox - < "$PROMPT_FILE"
+      if [[ "$UNSAFE" -eq 1 ]]; then
+        codex exec --dangerously-bypass-approvals-and-sandbox - < "$PROMPT_FILE"
+      else
+        codex exec --full-auto - < "$PROMPT_FILE"
+      fi
       ;;
     claude)
-      claude --dangerously-skip-permissions --print < "$PROMPT_FILE"
+      if [[ "$UNSAFE" -eq 1 ]]; then
+        claude --dangerously-skip-permissions --print < "$PROMPT_FILE"
+      else
+        claude --permission-mode acceptEdits --print < "$PROMPT_FILE"
+      fi
       ;;
     amp)
-      amp --dangerously-allow-all < "$PROMPT_FILE"
+      if [[ "$UNSAFE" -eq 1 ]]; then
+        amp --dangerously-allow-all < "$PROMPT_FILE"
+      else
+        amp < "$PROMPT_FILE"
+      fi
       ;;
     kimi)
-      kimi -p "$(cat "$PROMPT_FILE")"
+      if [[ "$UNSAFE" -eq 1 ]]; then
+        kimi --yolo -p "$(cat "$PROMPT_FILE")"
+      else
+        kimi -p "$(cat "$PROMPT_FILE")"
+      fi
       ;;
   esac
 }
@@ -145,6 +183,19 @@ has_json_reader() {
   command -v jq >/dev/null || command -v node >/dev/null || command -v python3 >/dev/null
 }
 
+all_stories_pass() {
+  [[ -f "$PRD_FILE" ]] || return 1
+  if command -v jq >/dev/null; then
+    jq -e '(.userStories | length) > 0 and all(.userStories[]; .passes == true)' "$PRD_FILE" >/dev/null 2>&1
+  elif command -v node >/dev/null; then
+    node -e "const fs=require('fs'); try { const d=JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); const s=d.userStories || []; process.exit(s.length > 0 && s.every(x => x.passes === true) ? 0 : 1); } catch { process.exit(1); }" "$PRD_FILE"
+  elif command -v python3 >/dev/null; then
+    python3 -c "import json,sys; d=json.load(open(sys.argv[1])); s=d.get('userStories') or []; sys.exit(0 if s and all(x.get('passes') is True for x in s) else 1)" "$PRD_FILE" 2>/dev/null
+  else
+    return 1
+  fi
+}
+
 cd "$REPO_ROOT"
 CURRENT_BRANCH="$(read_branch_name)"
 
@@ -157,6 +208,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "  branch: ${CURRENT_BRANCH:-<missing>}"
   echo "  agent: $AGENT"
   echo "  agent command: ${AGENT_COMMAND:-<built-in>}"
+  echo "  unsafe mode: $UNSAFE"
 
   has_json_reader || { echo "Error: jq, node, or python3 is required to read prd.json" >&2; exit 1; }
   [[ -f "$PRD_FILE" ]] || { echo "Error: missing $PRD_FILE" >&2; exit 1; }
@@ -172,21 +224,16 @@ fi
 
 validate_agent
 
+# A branch change means the previous run's prd.json was already overwritten.
+# Its content is unrecoverable at this point, so do NOT archive the current
+# (new) file under the old run's name. Archiving must happen before prd.json
+# is replaced; see the ralph skill's "Archiving Previous Runs" section.
 if [[ -f "$PRD_FILE" && -f "$LAST_BRANCH_FILE" ]]; then
   LAST_BRANCH="$(cat "$LAST_BRANCH_FILE" 2>/dev/null || true)"
   if [[ -n "$CURRENT_BRANCH" && -n "$LAST_BRANCH" && "$CURRENT_BRANCH" != "$LAST_BRANCH" ]]; then
-    DATE="$(date +%Y-%m-%d)"
-    FOLDER_NAME="$(echo "$LAST_BRANCH" | sed 's|^ralph/||')"
-    ARCHIVE_FOLDER="$ARCHIVE_DIR/$DATE-$FOLDER_NAME"
-    echo "Archiving previous run: $LAST_BRANCH"
-    mkdir -p "$ARCHIVE_FOLDER"
-    cp "$PRD_FILE" "$ARCHIVE_FOLDER/" 2>/dev/null || true
-    cp "$PROGRESS_FILE" "$ARCHIVE_FOLDER/" 2>/dev/null || true
-    {
-      echo "# Ralph Progress Log"
-      echo "Started: $(date)"
-      echo "---"
-    } > "$PROGRESS_FILE"
+    echo "Warning: prd.json branchName ($CURRENT_BRANCH) differs from the last run ($LAST_BRANCH)." >&2
+    echo "The previous run's prd.json has already been overwritten and cannot be archived now." >&2
+    echo "Archive prd.json and progress.txt BEFORE replacing them with a new run." >&2
   fi
 fi
 
@@ -202,7 +249,7 @@ if [[ ! -f "$PROGRESS_FILE" ]]; then
   } > "$PROGRESS_FILE"
 fi
 
-echo "Starting Ralph - Agent: $AGENT - Max iterations: $MAX_ITERATIONS"
+echo "Starting Ralph - Agent: $AGENT - Max iterations: $MAX_ITERATIONS - Unsafe: $UNSAFE"
 
 for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo ""
@@ -216,22 +263,33 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   set -e
 
   if [[ "$AGENT" == "codex" && -z "$AGENT_COMMAND" ]]; then
-    if echo "$OUTPUT" | grep -q "^assistant"; then
-      OUTPUT="$(echo "$OUTPUT" | awk 'BEGIN{found=0} /^assistant/{found=1;next} {if(found) print}')"
-    elif echo "$OUTPUT" | grep -q "^tokens used"; then
-      OUTPUT="$(echo "$OUTPUT" | awk 'BEGIN{found=0} /^tokens used/{found=1} {if(found) print}')"
+    if printf '%s\n' "$OUTPUT" | grep -q "^assistant"; then
+      OUTPUT="$(printf '%s\n' "$OUTPUT" | awk 'BEGIN{found=0} /^assistant/{found=1;next} {if(found) print}')"
+    elif printf '%s\n' "$OUTPUT" | grep -q "^tokens used"; then
+      OUTPUT="$(printf '%s\n' "$OUTPUT" | awk 'BEGIN{found=0} /^tokens used/{found=1} {if(found) print}')"
     fi
   fi
 
   if [[ "$AGENT_STATUS" -ne 0 ]]; then
-    echo "Warning: agent '$AGENT' exited with status $AGENT_STATUS on iteration $i." >&2
+    echo "" >&2
+    echo "Error: agent '$AGENT' exited with status $AGENT_STATUS on iteration $i." >&2
+    echo "Stopping instead of silently retrying. Inspect the output above, fix the cause, and re-run." >&2
+    exit "$AGENT_STATUS"
   fi
 
-  if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
-    echo ""
-    echo "Ralph completed all tasks!"
-    echo "Completed at iteration $i of $MAX_ITERATIONS"
-    exit 0
+  # The token only counts when it sits on a line by itself (surrounding
+  # whitespace tolerated), so agents mentioning it inside a sentence do not
+  # trigger a false completion.
+  if printf '%s\n' "$OUTPUT" | grep -qE '^[[:space:]]*<promise>COMPLETE</promise>[[:space:]]*$'; then
+    if all_stories_pass; then
+      echo ""
+      echo "Ralph completed all tasks!"
+      echo "Completed at iteration $i of $MAX_ITERATIONS"
+      exit 0
+    fi
+    echo "" >&2
+    echo "Warning: agent emitted the COMPLETE token but prd.json still has stories with passes != true." >&2
+    echo "Ignoring the token and continuing. Stories must not be marked passed without validation evidence." >&2
   fi
 
   echo "Iteration $i complete. Continuing..."

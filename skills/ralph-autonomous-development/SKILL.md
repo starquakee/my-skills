@@ -240,6 +240,13 @@ The runner invokes the adapter from the repository root and passes the path to
 turn and stream the agent output to stdout or stderr. Verify the installed
 agent's current non-interactive and permission flags instead of guessing them.
 
+By default the runner starts each built-in agent in its sandboxed / auto-accept
+mode (`codex --full-auto`, `claude --permission-mode acceptEdits`, `amp` and
+`kimi` with no bypass flags). Pass `--unsafe` only when the loop runs inside an
+externally sandboxed environment (container, VM, disposable checkout); it
+forwards the agent's bypass-approvals flag (`kimi --yolo`, etc.) and exports
+`RALPH_UNSAFE=1` to custom adapters.
+
 ## Phase 6: Supervise
 
 Between batches, inspect:
@@ -284,11 +291,12 @@ Only the autonomous agent should emit:
 <promise>COMPLETE</promise>
 ```
 
-when every story is complete and validated.
+on a line by itself, when every story is complete and validated. The runner treats the token as completion only if it appears on its own line AND `all(.userStories[]; .passes == true)` holds in `prd.json`; otherwise it warns and continues.
 
 ## Safety Rules
 
 - Do not run Ralph against a dirty worktree unless the user explicitly accepts the risk.
+- Do not use `--unsafe` outside an externally sandboxed environment.
 - Do not let `prd.json` replace the markdown PRD; `prd.json` is only the executable checklist.
 - Do not mark `passes: true` without validation evidence.
 - Do not make a story depend on a later story.
