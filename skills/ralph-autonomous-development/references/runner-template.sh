@@ -142,10 +142,12 @@ run_agent() {
 
   case "$AGENT" in
     codex)
+      # --ask-for-approval is a top-level flag; placing it after `exec` is
+      # rejected with "unexpected argument" (verified on 0.147.0-alpha).
       if [[ "$UNSAFE" -eq 1 ]]; then
         codex exec --dangerously-bypass-approvals-and-sandbox - < "$PROMPT_FILE"
       else
-        codex exec --sandbox workspace-write --ask-for-approval never - < "$PROMPT_FILE"
+        codex --sandbox workspace-write --ask-for-approval never exec - < "$PROMPT_FILE"
       fi
       ;;
     claude)
