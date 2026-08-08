@@ -5,16 +5,20 @@
 #   scripts/ralph/ralph.sh --agent NAME --agent-command PATH [--unsafe] [--dry-run] [max_iterations]
 #
 # Permission modes:
-#   Default runs each built-in agent in its sandboxed / auto-accept mode:
-#     codex: --full-auto (workspace-write sandbox)
+#   Default runs each built-in agent unattended but bounded:
+#     codex: --sandbox workspace-write --ask-for-approval never
+#            (writes confined to the workspace; nothing prompts)
 #     claude: --permission-mode acceptEdits
 #     amp: no bypass flags
-#     kimi: default permission mode from the user's config
+#     kimi: -p already applies the auto permission policy (no approval
+#           prompts); static deny rules still apply. This is NOT a sandbox:
+#           the agent runs with the user's privileges.
 #   --unsafe forwards the agent's bypass-approvals flag:
 #     codex: --dangerously-bypass-approvals-and-sandbox
 #     claude: --dangerously-skip-permissions
 #     amp: --dangerously-allow-all
-#     kimi: --yolo
+#     kimi: no-op (print mode is already auto-approved, and --yolo/--auto
+#           are rejected when combined with -p)
 #   Custom --agent-command adapters receive RALPH_UNSAFE=0|1 and decide for
 #   themselves. Use --unsafe only inside an externally sandboxed environment
 #   (container, VM, or disposable checkout).
@@ -141,7 +145,7 @@ run_agent() {
       if [[ "$UNSAFE" -eq 1 ]]; then
         codex exec --dangerously-bypass-approvals-and-sandbox - < "$PROMPT_FILE"
       else
-        codex exec --full-auto - < "$PROMPT_FILE"
+        codex exec --sandbox workspace-write --ask-for-approval never - < "$PROMPT_FILE"
       fi
       ;;
     claude)
@@ -159,11 +163,9 @@ run_agent() {
       fi
       ;;
     kimi)
-      if [[ "$UNSAFE" -eq 1 ]]; then
-        kimi --yolo -p "$(cat "$PROMPT_FILE")"
-      else
-        kimi -p "$(cat "$PROMPT_FILE")"
-      fi
+      # -p already applies the auto permission policy; --yolo and --auto are
+      # rejected when combined with -p, so there is no bypass flag to forward.
+      kimi -p "$(cat "$PROMPT_FILE")"
       ;;
   esac
 }
@@ -257,10 +259,15 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo "  Ralph Iteration $i of $MAX_ITERATIONS ($AGENT)"
   echo "==============================================================="
 
+  # Stream output live AND capture it via a plain temp file; process
+  # substitution (tee >(...)) fails in restricted sandboxes without /dev/fd.
+  LOG_FILE="$(mktemp "${TMPDIR:-/tmp}/ralph-output.XXXXXX")"
   set +e
-  OUTPUT="$(run_agent "$i" 2>&1 | tee >(cat >&2))"
-  AGENT_STATUS=$?
+  run_agent "$i" 2>&1 | tee "$LOG_FILE"
+  AGENT_STATUS=${PIPESTATUS[0]}
   set -e
+  OUTPUT="$(<"$LOG_FILE")"
+  rm -f "$LOG_FILE"
 
   if [[ "$AGENT" == "codex" && -z "$AGENT_COMMAND" ]]; then
     if printf '%s\n' "$OUTPUT" | grep -q "^assistant"; then

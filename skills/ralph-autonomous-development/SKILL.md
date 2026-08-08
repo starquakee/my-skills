@@ -240,12 +240,7 @@ The runner invokes the adapter from the repository root and passes the path to
 turn and stream the agent output to stdout or stderr. Verify the installed
 agent's current non-interactive and permission flags instead of guessing them.
 
-By default the runner starts each built-in agent in its sandboxed / auto-accept
-mode (`codex --full-auto`, `claude --permission-mode acceptEdits`, `amp` and
-`kimi` with no bypass flags). Pass `--unsafe` only when the loop runs inside an
-externally sandboxed environment (container, VM, disposable checkout); it
-forwards the agent's bypass-approvals flag (`kimi --yolo`, etc.) and exports
-`RALPH_UNSAFE=1` to custom adapters.
+By default the runner starts each built-in agent unattended but bounded: `codex exec --sandbox workspace-write --ask-for-approval never` (writes confined to the workspace, nothing prompts), `claude --permission-mode acceptEdits`, `amp` with no bypass flags, and `kimi -p`, which already applies the auto permission policy with static deny rules still in effect — note that kimi's default is an approval policy, not a sandbox, so the agent runs with the user's privileges. Pass `--unsafe` only when the loop runs inside an externally sandboxed environment (container, VM, disposable checkout); it forwards the agent's bypass-approvals flag (codex/claude/amp only — kimi's print mode is already auto-approved and rejects `--yolo`/`--auto`) and exports `RALPH_UNSAFE=1` to custom adapters.
 
 ## Phase 6: Supervise
 
