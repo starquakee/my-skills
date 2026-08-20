@@ -4,6 +4,7 @@ Personal Codex skill collection.
 
 ## Skills
 
+- `ai-style`
 - `codex-worker`
 - `diagnose`
 - `frontend-design`
