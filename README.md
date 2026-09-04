@@ -14,6 +14,7 @@ Personal Codex skill collection.
 - `improve-codebase-architecture`
 - `kill-ai-slop`
 - `prd`
+- `ponytail`
 - `pull-request`
 - `ralph`
 - `ralph-autonomous-development`
