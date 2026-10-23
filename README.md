@@ -18,4 +18,5 @@ Personal Codex skill collection.
 - `ralph`
 - `ralph-autonomous-development`
 - `tdd`
+- `write-doc`
 - `zoom-out`
