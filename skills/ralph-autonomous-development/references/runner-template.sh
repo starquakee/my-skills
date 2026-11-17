@@ -22,6 +22,10 @@
 #   Custom --agent-command adapters receive RALPH_UNSAFE=0|1 and decide for
 #   themselves. Use --unsafe only inside an externally sandboxed environment
 #   (container, VM, or disposable checkout).
+#
+# Completion requires scripts/ralph/final-validation.sh to exit 0. If final
+# validation fails, the runner records its output in progress.txt and starts
+# another repair iteration instead of reporting success.
 
 set -euo pipefail
 
@@ -101,10 +105,23 @@ PROGRESS_FILE="$REPO_ROOT/progress.txt"
 ARCHIVE_DIR="$REPO_ROOT/archive"
 LAST_BRANCH_FILE="$SCRIPT_DIR/.last-branch"
 PROMPT_FILE="$SCRIPT_DIR/AGENTS.md"
+FINAL_VALIDATION_SCRIPT="$SCRIPT_DIR/final-validation.sh"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
     echo "Error: required command '$1' was not found for agent '$AGENT'." >&2
+    exit 1
+  }
+}
+
+validate_final_validation() {
+  [[ -f "$FINAL_VALIDATION_SCRIPT" ]] || {
+    echo "Error: missing $FINAL_VALIDATION_SCRIPT" >&2
+    echo "Copy final-validation-template.sh and configure the PRD's aggregate validation." >&2
+    exit 1
+  }
+  [[ -x "$FINAL_VALIDATION_SCRIPT" ]] || {
+    echo "Error: final validation script is not executable: $FINAL_VALIDATION_SCRIPT" >&2
     exit 1
   }
 }
@@ -200,6 +217,43 @@ all_stories_pass() {
   fi
 }
 
+run_final_validation() {
+  local log_file status
+  echo ""
+  echo "Running final aggregate validation: $FINAL_VALIDATION_SCRIPT"
+  log_file="$(mktemp "${TMPDIR:-/tmp}/ralph-final-validation.XXXXXX")"
+  set +e
+  "$FINAL_VALIDATION_SCRIPT" 2>&1 | tee "$log_file"
+  status=${PIPESTATUS[0]}
+  set -e
+
+  if [[ "$status" -eq 0 ]]; then
+    {
+      printf '\n## %s - Final validation passed\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+      printf -- '- `%s` exited 0.\n' 'scripts/ralph/final-validation.sh'
+      printf -- '---\n'
+    } >> "$PROGRESS_FILE"
+    rm -f "$log_file"
+    return 0
+  fi
+
+  {
+    printf '\n## %s - Final validation failed\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+    printf -- '- Command: `scripts/ralph/final-validation.sh`\n'
+    printf -- '- Exit code: %s\n' "$status"
+    printf -- '- Repair this failure in the next iteration, then request final validation again.\n'
+    printf -- '- Output (last 80 lines):\n'
+    tail -80 "$log_file"
+    printf -- '---\n'
+  } >> "$PROGRESS_FILE"
+  rm -f "$log_file"
+
+  echo "" >&2
+  echo "Final validation failed with status $status. The failure was recorded in $PROGRESS_FILE." >&2
+  echo "The next agent iteration must repair it before completion is retried." >&2
+  return "$status"
+}
+
 cd "$REPO_ROOT"
 CURRENT_BRANCH="$(read_branch_name)"
 
@@ -221,12 +275,14 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   [[ -d "$ARCHIVE_DIR" ]] || { echo "Error: missing $ARCHIVE_DIR" >&2; exit 1; }
   [[ -f "$PROMPT_FILE" ]] || { echo "Error: missing $PROMPT_FILE" >&2; exit 1; }
   validate_agent
+  validate_final_validation
 
   echo "Dry run OK"
   exit 0
 fi
 
 validate_agent
+validate_final_validation
 
 # A branch change means the previous run's prd.json was already overwritten.
 # Its content is unrecoverable at this point, so do NOT archive the current
@@ -291,14 +347,17 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   # trigger a false completion.
   if printf '%s\n' "$OUTPUT" | grep -qE '^[[:space:]]*<promise>COMPLETE</promise>[[:space:]]*$'; then
     if all_stories_pass; then
-      echo ""
-      echo "Ralph completed all tasks!"
-      echo "Completed at iteration $i of $MAX_ITERATIONS"
-      exit 0
+      if run_final_validation; then
+        echo ""
+        echo "Ralph completed all tasks and final aggregate validation passed!"
+        echo "Completed at iteration $i of $MAX_ITERATIONS"
+        exit 0
+      fi
+    else
+      echo "" >&2
+      echo "Warning: agent emitted the COMPLETE token but prd.json still has stories with passes != true." >&2
+      echo "Ignoring the token and continuing. Stories must not be marked passed without validation evidence." >&2
     fi
-    echo "" >&2
-    echo "Warning: agent emitted the COMPLETE token but prd.json still has stories with passes != true." >&2
-    echo "Ignoring the token and continuing. Stories must not be marked passed without validation evidence." >&2
   fi
 
   echo "Iteration $i complete. Continuing..."

@@ -16,6 +16,7 @@ feature intent
   -> scripts/ralph/ralph.sh loop runner
   -> one story per fresh agent run
   -> progress.txt + git commits as durable memory
+  -> scripts/ralph/final-validation.sh aggregate completion gate
 ```
 
 ## First Decision
@@ -151,13 +152,15 @@ Create or update:
 ```text
 scripts/ralph/AGENTS.md
 scripts/ralph/ralph.sh
+scripts/ralph/final-validation.sh
 progress.txt
 archive/
 ```
 
 Use `references/agents-template.md` for `scripts/ralph/AGENTS.md`.
 Use `references/runner-template.sh` for `scripts/ralph/ralph.sh`.
-Use `references/file-contracts.md` for `progress.txt` and archive rules.
+Use `references/final-validation-template.sh` for `scripts/ralph/final-validation.sh`, replacing its placeholder failure with the exact aggregate commands from the PRD's `Validation` section.
+Use `references/file-contracts.md` for `progress.txt`, final validation, and archive rules.
 
 Bootstrap a new repository with this shape:
 
@@ -165,7 +168,8 @@ Bootstrap a new repository with this shape:
 mkdir -p tasks scripts/ralph archive
 # Copy this skill's references/runner-template.sh to scripts/ralph/ralph.sh
 # Copy this skill's references/agents-template.md to scripts/ralph/AGENTS.md
-chmod +x scripts/ralph/ralph.sh
+# Copy this skill's references/final-validation-template.sh to scripts/ralph/final-validation.sh
+chmod +x scripts/ralph/ralph.sh scripts/ralph/final-validation.sh
 test -f progress.txt || {
   printf '# Ralph Progress: [Feature Name]\n\n'
   printf 'Started: %s\n' "$(date +%Y-%m-%d)"
@@ -197,6 +201,7 @@ Dry-run must verify:
 - `prd.json.branchName` is present
 - root `progress.txt` exists
 - `archive/` exists
+- `scripts/ralph/final-validation.sh` exists, is executable, and contains the PRD's aggregate validation
 - the requested built-in agent or custom adapter is available
 - at least one JSON reader is available: `jq`, `node`, or `python3`
 
@@ -278,7 +283,9 @@ When all stories pass:
 jq -e 'all(.userStories[]; .passes == true)' prd.json
 ```
 
-Run the PRD's final aggregate validation. Then decide whether to merge, open a PR, tag a release, or archive the run.
+The runner then executes `scripts/ralph/final-validation.sh`, which must contain the PRD's final aggregate validation. It reports success only when the completion token appears on its own line, every story passes, and this script exits 0.
+
+If final validation fails, the runner appends the exit code and recent output to `progress.txt`, then uses the next iteration to repair it. Reaching the iteration limit without passing final validation exits nonzero. When operating outside the runner, run `scripts/ralph/final-validation.sh` manually before merging, opening a PR, tagging a release, or archiving the run.
 
 Only the autonomous agent should emit:
 
@@ -286,7 +293,7 @@ Only the autonomous agent should emit:
 <promise>COMPLETE</promise>
 ```
 
-on a line by itself, when every story is complete and validated. The runner treats the token as completion only if it appears on its own line AND `all(.userStories[]; .passes == true)` holds in `prd.json`; otherwise it warns and continues.
+on a line by itself, when every story is complete and validated. The token requests the runner's final aggregate validation; it is not sufficient for completion by itself.
 
 ## Safety Rules
 

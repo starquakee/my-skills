@@ -77,6 +77,18 @@ Rules:
 - Promote repeated gotchas into `Codebase Patterns`.
 - Create this file before `scripts/ralph/ralph.sh --dry-run`; dry-run is a validator, not an initializer.
 
+## `scripts/ralph/final-validation.sh`
+
+Location: `scripts/ralph/final-validation.sh` in the target repository.
+
+Purpose: executable aggregate validation for the completed story checklist.
+
+Copy `references/final-validation-template.sh`, then replace its placeholder failure with the exact final commands from the PRD's `Validation` section. The script runs from the repository root and must exit 0 only when the integrated product passes those checks.
+
+The runner requires this file to exist and be executable. When every story passes and the agent emits the completion token, the runner executes this script before reporting success. A failure is appended to `progress.txt` with its exit code and recent output, and the next agent iteration repairs it. Reaching the iteration limit without a successful final validation exits nonzero.
+
+Do not leave the placeholder failure in place, and do not replace real validation with a no-op such as `exit 0` or `true`.
+
 ## `archive/`
 
 Location: repository root.
